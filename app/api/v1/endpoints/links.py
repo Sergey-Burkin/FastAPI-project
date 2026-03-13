@@ -53,14 +53,6 @@ async def get_expired_links(
     links = result
     return links
 
-@router.get("/{short_code}", status_code=status.HTTP_307_TEMPORARY_REDIRECT)
-async def redirect_to_original(short_code: str, db: AsyncSession = Depends(get_db)):
-    original_url = await LinkService.get_original_url(db, short_code)
-    if not original_url:
-        raise HTTPException(status_code=404, detail="Link not found or expired")
-    from fastapi.responses import RedirectResponse
-    return RedirectResponse(url=original_url)
-
 @router.delete("/{short_code}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_link(
     short_code: str,
