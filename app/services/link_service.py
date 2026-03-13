@@ -2,11 +2,11 @@ import random
 import string
 from datetime import datetime
 from typing import List, Optional
-from sqlalchemy import select, update
+from sqlalchemy import select, update, or_, func
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.models.link import Link
-from app.schemas.link import LinkCreate
-from app.db.redis_client import redis_client
+from models.link import Link
+from schemas.link import LinkCreate
+from db.redis_client import redis_client
 
 class LinkService:
     @staticmethod
@@ -102,8 +102,20 @@ class LinkService:
 
     @staticmethod
     async def search_by_original_url(db: AsyncSession, original_url: str) -> List[Link]:
-        print("Searching for links with original_url:", original_url)
+        # Strip scheme and trailing slash from the query
+        query = original_url.lower().rstrip('/')
+        if query.startswith('http://'):
+            query = query[7:]
+        elif query.startswith('https://'):
+            query = query[8:]
+
+        # Match against patterns in the database
         result = await db.execute(
-            select(Link).where(Link.original_url == original_url)
+            select(Link).where(
+                or_(
+                    Link.original_url.ilike(f'%{query}%'),
+                    func.replace(func.replace(Link.original_url, 'http://', ''), 'https://', '').ilike(f'%{query}%')
+                )
+            )
         )
         return result.scalars().all()

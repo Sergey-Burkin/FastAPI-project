@@ -1,6 +1,6 @@
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
-from app.core.config import settings
+from core.config import settings
 
 print(settings.POSTGRES_DSN)
 engine = create_async_engine(str(settings.POSTGRES_DSN), echo=True)

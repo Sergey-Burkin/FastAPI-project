@@ -1,14 +1,14 @@
 from fastapi import FastAPI
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
-from app.api.v1.router import router as v1_router
-from app.core.config import settings
-from app.services.cleanup_service import cleanup_expired_links, cleanup_unused_links
+from api.v1.router import router as v1_router
+from core.config import settings
+from services.cleanup_service import cleanup_expired_links, cleanup_unused_links
+from datetime import datetime
 
-# Импортируем необходимые компоненты для создания таблиц
-from app.db.session import engine
-from app.db.base import Base
-import app.models  # этот импорт нужен, чтобы все модели были загружены
+from db.session import engine
+from db.base import Base
+import models  
 
 app = FastAPI(title=settings.PROJECT_NAME, version=settings.VERSION)
 
@@ -23,8 +23,8 @@ async def startup_event():
         await conn.run_sync(Base.metadata.create_all)
     
     scheduler.start()
-    scheduler.add_job(cleanup_expired_links, IntervalTrigger(hours=1), id="cleanup_expired")
-    scheduler.add_job(cleanup_unused_links, IntervalTrigger(days=1), id="cleanup_unused")
+    scheduler.add_job(cleanup_expired_links, IntervalTrigger(hours=1), next_run_time=datetime.now(),  id="cleanup_expired")
+    scheduler.add_job(cleanup_unused_links, IntervalTrigger(days=1), next_run_time=datetime.now(), id="cleanup_unused")
 
 @app.on_event("shutdown")
 async def shutdown_event():

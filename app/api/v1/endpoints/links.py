@@ -1,13 +1,15 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, update
 from typing import List, Optional
 from datetime import datetime
 
-from app.schemas.link import LinkCreate, LinkInfo, LinkUpdate
-from app.services.link_service import LinkService
-from app.db.session import get_db
-from app.api.dependencies import get_optional_current_user, get_current_active_user
-from app.models.user import User
+from schemas.link import LinkCreate, LinkInfo, LinkUpdate
+from services.link_service import LinkService
+from db.session import get_db
+from api.dependencies import get_optional_current_user, get_current_active_user
+from models.user import User
+from models.link import Link
 
 router = APIRouter(prefix="/links", tags=["links"])
 
@@ -23,6 +25,33 @@ async def shorten_link(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     return link
+
+@router.get("/search", response_model=List[LinkInfo])
+async def search_links(
+    original_url: str = Query(..., description="Exact original URL to search for"),
+    db: AsyncSession = Depends(get_db)
+):
+    print("Searching for links with original_url:", original_url)
+    links = await LinkService.search_by_original_url(db, original_url)
+    return links
+
+@router.get("/expired", response_model=List[LinkInfo])
+async def get_expired_links(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Возвращает истекшие ссылки текущего пользователя."""
+    print("Fetching expired links for user_id:", current_user.id)
+    now = datetime.utcnow()
+    result = (await db.execute(
+        select(Link).where(
+            Link.user_id == current_user.id,
+            Link.expires_at < now
+        )
+    )).scalars().all()
+    print("Expired links query executed for user_id:", current_user.id)
+    links = result
+    return links
 
 @router.get("/{short_code}", status_code=status.HTTP_307_TEMPORARY_REDIRECT)
 async def redirect_to_original(short_code: str, db: AsyncSession = Depends(get_db)):
@@ -68,30 +97,3 @@ async def get_link_stats(short_code: str, db: AsyncSession = Depends(get_db)):
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
-@router.get("/search", response_model=List[LinkInfo])
-async def search_links(
-    original_url: str = Query(..., description="Exact original URL to search for"),
-    db: AsyncSession = Depends(get_db)
-):
-    print("Searching for links with original_url:", original_url)
-    links = await LinkService.search_by_original_url(db, original_url)
-    return links
-
-@router.get("/expired", response_model=List[LinkInfo])
-async def get_expired_links(
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
-):
-    """Возвращает истекшие ссылки текущего пользователя."""
-    print("Fetching expired links for user_id:", current_user.id)
-    now = datetime.utcnow()
-    result = await db.execute(
-        select(Link).where(
-            Link.user_id == current_user.id,
-            Link.expires_at < now
-        )
-    )
-    print("Expired links query executed for user_id:", current_user.id)
-    print(now, result)
-    links = result.scalars().all()
-    return links
